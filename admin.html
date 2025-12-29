@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gadmate Pro | Master Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap');
+        body { font-family: 'Hind Siliguri', sans-serif; background: #0f172a; color: white; margin: 0; }
+        .tab-btn.active { background: #f97316; color: white; border-color: #f97316; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 20px; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        input, select, textarea { background: #0f172a !important; border: 1px solid #334155 !important; color: white !important; outline: none; padding: 12px; }
+        .completed-order { opacity: 0.6; border-left: 5px solid #22c55e !important; }
+        .img-slot { background: #0f172a; border: 2px dashed #334155; height: 60px; border-radius: 12px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+        .img-slot img { width: 100%; height: 100%; object-cover: cover; }
+    </style>
+</head>
+<body class="pb-24">
+
+    <div id="login-overlay" class="fixed inset-0 bg-black z-[9999] flex items-center justify-center p-6">
+        <div class="card p-8 w-full max-w-sm text-center border-orange-500/50">
+            <h1 class="text-3xl font-black text-orange-500 mb-6 italic">GADMATE <span class="text-white">PRO</span></h1>
+            <input type="password" id="admin-pass" placeholder="Password (1234)" class="w-full rounded-xl mb-4 text-center tracking-widest">
+            <button onclick="checkPass()" class="w-full bg-orange-500 text-white py-4 rounded-xl font-bold shadow-lg">Login</button>
+        </div>
+    </div>
+
+    <div id="admin-ui" class="hidden">
+        <header class="p-5 border-b border-gray-800 flex justify-between items-center sticky top-0 bg-[#0f172a]/90 backdrop-blur-md z-40">
+            <h1 class="text-xl font-black italic text-orange-500">ADMIN <span class="text-white">PANEL</span></h1>
+            <div class="flex items-center gap-4">
+                <div class="relative cursor-pointer" onclick="switchTab('orders')">
+                    <i class="fa-solid fa-bell text-xl text-gray-400"></i>
+                    <span id="notif-dot" class="hidden absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-[#0f172a]"></span>
+                </div>
+                <div id="live-clock" class="text-[10px] font-mono text-gray-400"></div>
+            </div>
+        </header>
+
+        <div class="p-5 grid grid-cols-2 gap-4">
+            <div class="card p-5 border-l-4 border-orange-500">
+                <p class="text-[10px] uppercase font-bold text-gray-400">Sales Today</p>
+                <h2 id="stat-sales" class="text-2xl font-black text-white">৳০</h2>
+            </div>
+            <div class="card p-5 border-l-4 border-blue-500">
+                <p class="text-[10px] uppercase font-bold text-gray-400">Orders Today</p>
+                <h2 id="stat-orders" class="text-2xl font-black text-white">০</h2>
+            </div>
+        </div>
+
+        <div class="px-5 mb-6"><input type="date" id="date-filter" onchange="loadOrders()" class="w-full card bg-transparent text-sm"></div>
+        
+        <div class="flex px-5 gap-2 overflow-x-auto no-scrollbar mb-6">
+            <button onclick="switchTab('orders')" id="btn-orders" class="tab-btn active px-6 py-2 rounded-full border border-gray-700 text-xs font-bold whitespace-nowrap">ORDERS</button>
+            <button onclick="switchTab('products')" id="btn-products" class="tab-btn px-6 py-2 rounded-full border border-gray-700 text-xs font-bold whitespace-nowrap">PRODUCTS</button>
+            <button onclick="switchTab('cats')" id="btn-cats" class="tab-btn px-6 py-2 rounded-full border border-gray-700 text-xs font-bold whitespace-nowrap">CATEGORIES</button>
+            <button onclick="switchTab('settings')" id="btn-settings" class="tab-btn px-6 py-2 rounded-full border border-gray-700 text-xs font-bold whitespace-nowrap">SETTINGS</button>
+        </div>
+
+        <div id="tab-orders" class="tab-content px-5 space-y-4"></div>
+        
+        <div id="tab-products" class="tab-content hidden px-5">
+            <button onclick="openAddModal()" class="w-full bg-orange-500 py-4 rounded-2xl font-black mb-6">+ ADD PRODUCT</button>
+            <div id="products-list" class="space-y-3"></div>
+        </div>
+
+        <div id="tab-cats" class="tab-content hidden px-5">
+            <div class="card p-5 mb-6">
+                <input type="text" id="new-cat-input" placeholder="Category Name" class="w-full rounded-xl mb-3">
+                <button onclick="addCategory()" class="w-full bg-blue-600 py-3 rounded-xl font-bold">Add Category</button>
+            </div>
+            <div id="cats-list" class="space-y-2"></div>
+        </div>
+
+        <div id="tab-settings" class="tab-content hidden px-5">
+            <div class="card p-6 space-y-5">
+                <h3 class="text-orange-500 font-bold border-b border-gray-700 pb-2">Config & Pixel</h3>
+                <div><label class="text-[10px]">WhatsApp</label><input type="text" id="wa-input" class="w-full rounded-xl mt-1"></div>
+                <div><label class="text-[10px]">Email</label><input type="email" id="email-input" class="w-full rounded-xl mt-1"></div>
+                <div><label class="text-[10px]">Pixel ID</label><input type="text" id="pix-input" class="w-full rounded-xl mt-1"></div>
+                <button onclick="saveSettings()" class="w-full bg-green-600 py-4 rounded-xl font-black">SAVE ALL CONFIG</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="add-modal" class="hidden fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-6 overflow-y-auto">
+        <div class="card p-6 w-full max-w-lg space-y-4 my-auto">
+            <h2 class="text-xl font-bold text-orange-500">New Product</h2>
+            <input type="text" id="p-name" placeholder="Product Name" class="w-full rounded-xl">
+            <div class="grid grid-cols-2 gap-3">
+                <input type="number" id="p-price" placeholder="Price" class="rounded-xl">
+                <select id="p-cat" class="rounded-xl text-sm"></select>
+            </div>
+
+            <p class="text-[10px] font-bold text-gray-400 uppercase">Product Images (Main + 4 Others)</p>
+            <div class="grid grid-cols-5 gap-2">
+                <div class="img-slot">
+                    <label class="w-full h-full flex items-center justify-center cursor-pointer">
+                        <input type="file" accept="image/*" class="hidden" onchange="previewImgSlot(this, 's1')">
+                        <i id="plus-s1" class="fa-solid fa-plus text-orange-500"></i>
+                        <img id="img-s1" class="hidden">
+                    </label>
+                </div>
+                <div class="img-slot">
+                    <label class="w-full h-full flex items-center justify-center cursor-pointer">
+                        <input type="file" accept="image/*" class="hidden" onchange="previewImgSlot(this, 's2')">
+                        <i id="plus-s2" class="fa-solid fa-plus text-gray-600 text-xs"></i>
+                        <img id="img-s2" class="hidden">
+                    </label>
+                </div>
+                <div class="img-slot">
+                    <label class="w-full h-full flex items-center justify-center cursor-pointer">
+                        <input type="file" accept="image/*" class="hidden" onchange="previewImgSlot(this, 's3')">
+                        <i id="plus-s3" class="fa-solid fa-plus text-gray-600 text-xs"></i>
+                        <img id="img-s3" class="hidden">
+                    </label>
+                </div>
+                <div class="img-slot">
+                    <label class="w-full h-full flex items-center justify-center cursor-pointer">
+                        <input type="file" accept="image/*" class="hidden" onchange="previewImgSlot(this, 's4')">
+                        <i id="plus-s4" class="fa-solid fa-plus text-gray-600 text-xs"></i>
+                        <img id="img-s4" class="hidden">
+                    </label>
+                </div>
+                <div class="img-slot">
+                    <label class="w-full h-full flex items-center justify-center cursor-pointer">
+                        <input type="file" accept="image/*" class="hidden" onchange="previewImgSlot(this, 's5')">
+                        <i id="plus-s5" class="fa-solid fa-plus text-gray-600 text-xs"></i>
+                        <img id="img-s5" class="hidden">
+                    </label>
+                </div>
+            </div>
+
+            <textarea id="p-desc" placeholder="Details..." class="w-full rounded-xl" rows="3"></textarea>
+            <div class="flex gap-3">
+                <button onclick="closeAddModal()" class="flex-1 bg-gray-800 py-3 rounded-xl font-bold">Cancel</button>
+                <button id="save-p-btn" onclick="saveProductPro()" class="flex-1 bg-orange-500 py-3 rounded-xl font-bold">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://uxfmbctmiwkqksxtpkij.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV4Zm1iY3RtaXdrcWtzeHRwa2lqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5MDUzMDEsImV4cCI6MjA4MjQ4MTMwMX0.9jOMzbz7l2iNhN3Me-pcwfLNt0UMVDYmRP_jYoZewcw'; 
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let lastOrderCount = 0;
+        let selectedFiles = { s1: null, s2: null, s3: null, s4: null, s5: null };
+
+        function checkPass() {
+            if(document.getElementById('admin-pass').value === "1234") {
+                document.getElementById('login-overlay').classList.add('hidden');
+                document.getElementById('admin-ui').classList.remove('hidden');
+                init();
+            } else { alert("Wrong Password!"); }
+        }
+
+        async function init() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('date-filter').value = today;
+            loadOrders(); loadProducts(); loadCategories(); loadSettings();
+            setInterval(checkNewOrders, 10000);
+            setInterval(() => document.getElementById('live-clock').innerText = new Date().toLocaleString(), 1000);
+        }
+
+        // --- UPDATED IMAGE PREVIEW ---
+        function previewImgSlot(input, slot) {
+            if (input.files && input.files[0]) {
+                selectedFiles[slot] = input.files[0];
+                const reader = new FileReader();
+                reader.onload = e => { 
+                    document.getElementById('img-'+slot).src = e.target.result; 
+                    document.getElementById('img-'+slot).classList.remove('hidden'); 
+                    document.getElementById('plus-'+slot).classList.add('hidden'); 
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        // --- NEW SAVE PRODUCT LOGIC ---
+        async function saveProductPro() {
+            const btn = document.getElementById('save-p-btn');
+            if(!selectedFiles.s1) return alert("Main Image is required!");
+
+            btn.disabled = true; btn.innerText = "Uploading...";
+            
+            let imgUrls = { s1: null, s2: null, s3: null, s4: null, s5: null };
+
+            for (let slot in selectedFiles) {
+                if (selectedFiles[slot]) {
+                    const file = selectedFiles[slot];
+                    const fileName = Date.now() + '-' + slot + '-' + file.name;
+                    const { error: upErr } = await _supabase.storage.from('product-images').upload(fileName, file);
+                    if(!upErr) {
+                        const { data: urlData } = _supabase.storage.from('product-images').getPublicUrl(fileName);
+                        imgUrls[slot] = urlData.publicUrl;
+                    }
+                }
+            }
+
+            const p = {
+                name: document.getElementById('p-name').value,
+                price: parseInt(document.getElementById('p-price').value),
+                category: document.getElementById('p-cat').value,
+                img: imgUrls.s1,
+                img2: imgUrls.s2,
+                img3: imgUrls.s3,
+                img4: imgUrls.s4,
+                img5: imgUrls.s5,
+                description: document.getElementById('p-desc').value
+            };
+
+            const { error } = await _supabase.from('products').insert([p]);
+            if(!error) {
+                alert("Product Added!");
+                location.reload();
+            } else {
+                alert("Error: " + error.message);
+                btn.disabled = false; btn.innerText = "Save";
+            }
+        }
+
+        // --- REMAINING FUNCTIONS (UNCHANGED) ---
+        async function loadOrders() {
+            const date = document.getElementById('date-filter').value;
+            const { data } = await _supabase.from('orders').select('*').gte('created_at', date + 'T00:00:00').lte('created_at', date + 'T23:59:59').order('created_at', {ascending: false});
+            let total = 0;
+            if(data) {
+                data.forEach(o => total += parseInt(o.total.replace(/\D/g,'')));
+                document.getElementById('stat-sales').innerText = '৳' + total.toLocaleString();
+                document.getElementById('stat-orders').innerText = data.length;
+                document.getElementById('tab-orders').innerHTML = data.map(o => `
+                    <div class="card p-5 ${o.status === 'completed' ? 'completed-order' : ''}">
+                        <div class="flex justify-between mb-2">
+                            <h4 class="font-bold">${o.name}</h4>
+                            <span class="text-orange-500 font-black">${o.total}</span>
+                        </div>
+                        <div class="text-xs text-gray-400 mb-4 bg-black/20 p-2 rounded">${o.items}</div>
+                        <div class="flex gap-2">
+                            <button onclick="completeOrder(${o.id})" class="flex-1 ${o.status === 'completed' ? 'bg-green-600' : 'bg-gray-700'} py-2 rounded-lg text-xs font-bold text-white">Done</button>
+                            <a href="tel:${o.phone}" class="flex-1 bg-blue-600/20 text-blue-500 py-2 rounded-lg text-center text-xs font-bold border border-blue-500/30 text-center flex items-center justify-center">Call</a>
+                            <button onclick="deleteOrder(${o.id})" class="p-2 bg-red-600/10 text-red-500 rounded-lg"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function loadProducts() {
+            const { data } = await _supabase.from('products').select('*').order('created_at', {ascending: false});
+            if(data) document.getElementById('products-list').innerHTML = data.map(p => `<div class="card p-3 flex items-center gap-3"><img src="${p.img}" class="w-12 h-12 rounded object-cover"><div class="flex-1 font-bold text-xs truncate">${p.name}</div><button onclick="deleteProduct(${p.id})" class="text-red-500"><i class="fa-solid fa-trash"></i></button></div>`).join('');
+        }
+
+        async function loadCategories() {
+            const { data } = await _supabase.from('categories').select('*');
+            if(data) {
+                document.getElementById('cats-list').innerHTML = data.map(c => `<div class="card p-3 flex justify-between"><span>${c.name}</span><button onclick="deleteCat(${c.id})" class="text-red-500">X</button></div>`).join('');
+                document.getElementById('p-cat').innerHTML = data.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+            }
+        }
+
+        async function loadSettings() {
+            const { data } = await _supabase.from('settings').select('*').eq('id', 1).single();
+            if(data) {
+                document.getElementById('wa-input').value = data.whatsapp || '';
+                document.getElementById('email-input').value = data.admin_email || '';
+                document.getElementById('pix-input').value = data.pixel_id || '';
+            }
+        }
+
+        async function saveSettings() {
+            const obj = { id: 1, whatsapp: document.getElementById('wa-input').value, admin_email: document.getElementById('email-input').value, pixel_id: document.getElementById('pix-input').value };
+            await _supabase.from('settings').upsert(obj);
+            alert("Settings Saved!");
+        }
+
+        async function completeOrder(id) { await _supabase.from('orders').update({ status: 'completed' }).eq('id', id); loadOrders(); }
+        async function deleteOrder(id) { if(confirm("Delete?")) { await _supabase.from('orders').delete().eq('id', id); loadOrders(); } }
+        async function deleteProduct(id) { if(confirm("Delete?")) { await _supabase.from('products').delete().eq('id', id); loadProducts(); } }
+        async function deleteCat(id) { if(confirm("Delete?")) { await _supabase.from('categories').delete().eq('id', id); loadCategories(); } }
+        async function addCategory() { await _supabase.from('categories').insert([{name: document.getElementById('new-cat-input').value}]); loadCategories(); }
+
+        async function checkNewOrders() {
+            const { data } = await _supabase.from('orders').select('id');
+            if(data && lastOrderCount != 0 && data.length > lastOrderCount) {
+                document.getElementById('notif-dot').classList.remove('hidden');
+                new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play();
+                loadOrders();
+            }
+            if(data) lastOrderCount = data.length;
+        }
+
+        function switchTab(t) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tab-' + t).classList.remove('hidden');
+            document.getElementById('btn-' + t).classList.add('active');
+            if(t === 'orders') document.getElementById('notif-dot').classList.add('hidden');
+        }
+
+        function openAddModal() { document.getElementById('add-modal').classList.remove('hidden'); }
+        function closeAddModal() { document.getElementById('add-modal').classList.add('hidden'); }
+    </script>
+</body>
+</html>
